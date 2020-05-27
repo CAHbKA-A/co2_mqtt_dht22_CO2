@@ -4,7 +4,7 @@
 #include <SoftwareSerial.h>
 
 // Uncomment one of the lines bellow for whatever DHT sensor type you're using!
-#define DHTTYPE DHT22   // DHT 11
+#define DHTTYPE DHT22   // DHT11,DHT21,
 #define LED_BUILTIN 2
 #define agrigation_hum 2 //усредняем по 2 значениям 
 #define agrigation_temp 2 //усредняем по 2 значениям 
