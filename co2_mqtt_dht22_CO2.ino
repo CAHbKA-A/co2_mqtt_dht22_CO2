@@ -4,10 +4,11 @@
 #include <SoftwareSerial.h>
 
 // Uncomment one of the lines bellow for whatever DHT sensor type you're using!
-#define DHTTYPE DHT22   // DHT11,DHT21,
+#define DHTTYPE DHT22   // DHT 11
 #define LED_BUILTIN 2
 #define agrigation_hum 2 //усредняем по 2 значениям 
 #define agrigation_temp 2 //усредняем по 2 значениям 
+#define DHTPin  5
 int count_hum = 0;
 float sum_hum = 0;
 float h_old = 0;
@@ -18,6 +19,8 @@ float h = 0;
 int count_temp = 0;
 float sum_temp = 0;
 float t = 0;
+#define button_pin  4//кнопка для переключения на интрнет. удерживать при включении
+boolean butt; //состояние кнопки
 
 // CO2 sensor:
 SoftwareSerial mySerial(12, 13); // RX,TX
@@ -25,25 +28,24 @@ byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 unsigned char response[9];
 
 // Change the credentials below, so your ESP8266 connects to your router
-const char* ssid = "имя wifi";
-const char* password = "ПАРОЛЬ WiFi";
-const char* mqttUser = "логин MQTT";
-const char* mqttPassword = "Пароль MQTT";
+const char* ssid = "вайфасеть роутреа"; //для локалки
+const char* password = "пароль сети роутера ";//для локалки
+const char* ssid_inet = "Asus";//для интернета . например на мобиле
+const char* password_inet = "Asus12345";//для интернета,например на мобиле
+const char* mqttUser = "Логин брокера mqtt";
+const char* mqttPassword = "Пароль брокера mqtt";
 const char* mqttTopicHumidity = "/ESP_sens1/DHT/HUM";
 const char* mqttTopicTemperature = "/ESP_sens1/DHT/TEMP";
 const char* mqttTopicCO2 = "/ESP_sens1/DHT/CO2";
 const char* mqttTopicmhz_temp = "/ESP_sens1/DHT/mhz_temp";
-const char* clientName = "ESP8266_CO2_DHT_spalnya";
-const char* mqtt_server = "192.168.1.11"; //адрес mqtt брокера
-
-// DHT Sensor - GPIO 5 = D1 on ESP-12E NodeMCU board
-const int DHTPin = 5;
+const char* clientName = "ESP8266_DTH11_spalnya";
+char* mqtt_server = "192.168.1.7";//для локалки
+char* mqtt_server_inet = "cah.ddns.net";//внешний ip или адрес для интернета
 
 
-// Timers auxiliar variables
 unsigned long now = millis();
 unsigned long lastMeasure = 0;
-unsigned long resendtime = 60000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
+unsigned long resendtime = 15000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -52,12 +54,26 @@ DHT dht(DHTPin, DHTTYPE);
 
 
 void setup() {
+  Serial.begin(9600);
+  Serial.println("Starting ESP");
+  pinMode (button_pin,INPUT_PULLUP);
+  //Если зажата кнопка при включении, то работаем через интрнет
+  delay(1000);
+  butt = !digitalRead(button_pin);// но кнопку на gnd;
+  if (butt == 1 ) {
+  ssid = ssid_inet;
+  password = password_inet;
+  mqtt_server = mqtt_server_inet;
+  
+}
+  
   dht.begin();
   setup_wifi();
+  Serial.print("Connecting to MQTT ");
+  Serial.println(mqtt_server);
   client.setServer(mqtt_server, 1883);
   pinMode(LED_BUILTIN, OUTPUT);
   client.setCallback(callback);
-  Serial.begin(9600);
   mySerial.begin(9600);
 }
 
@@ -219,10 +235,13 @@ void loop() {
 
 void setup_wifi() {
   delay(10);
+  Serial.print("Connecting to WiFi ");
+  Serial.println(ssid);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
   delay(500);
   }
+  Serial.println("Connected to WiFi");
 }
 
 
@@ -236,8 +255,10 @@ void callback(String topic, byte* message, unsigned int length) {
 
 // This functions reconnects your ESP8266 to your MQTT broker
 void reconnect() {
-   while (!client.connected()) {
+  Serial.println("reconnecting to MQTT ");
+    while (!client.connected()) {
       if (client.connect(WiFi.hostname().c_str(), mqttUser, mqttPassword)) {
+         Serial.println("Connected to MQTT ");
         } else {
       // Wait 5 seconds before retrying
          delay(5000);
