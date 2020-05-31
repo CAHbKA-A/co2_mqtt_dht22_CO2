@@ -6,6 +6,8 @@
 // Uncomment one of the lines bellow for whatever DHT sensor type you're using!
 #define DHTTYPE DHT22   // DHT 11
 #define LED_BUILTIN 2
+#define pin_analog_out 15 //красный светодиод
+#define redLevelPPM 1000 //Уровень СО2 для красного светодиода
 #define agrigation_hum 2 //усредняем по 2 значениям 
 #define agrigation_temp 2 //усредняем по 2 значениям 
 #define DHTPin  5
@@ -28,24 +30,28 @@ byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 unsigned char response[9];
 
 // Change the credentials below, so your ESP8266 connects to your router
-const char* ssid = "вайфасеть роутреа"; //для локалки
-const char* password = "пароль сети роутера ";//для локалки
-const char* ssid_inet = "Asus";//для интернета . например на мобиле
-const char* password_inet = "Asus12345";//для интернета,например на мобиле
-const char* mqttUser = "Логин брокера mqtt";
-const char* mqttPassword = "Пароль брокера mqtt";
+const char* ssid = "C***"; //для локалки
+const char* password = "****";//для локалки
+const char* ssid_inet = "Asus";//для интернета, например на мобиле
+const char* password_inet = "Asus12345";//для интернета, например на мобиле
+const char* mqttUser = "****";
+const char* mqttPassword = "*****";
 const char* mqttTopicHumidity = "/ESP_sens1/DHT/HUM";
 const char* mqttTopicTemperature = "/ESP_sens1/DHT/TEMP";
 const char* mqttTopicCO2 = "/ESP_sens1/DHT/CO2";
 const char* mqttTopicmhz_temp = "/ESP_sens1/DHT/mhz_temp";
 const char* clientName = "ESP8266_DTH11_spalnya";
-char* mqtt_server = "192.168.1.7";//для локалки
-char* mqtt_server_inet = "cah.ddns.net";//внешний ip или адрес для интернета
+char* mqtt_server = "192****";//для локалки
+char* mqtt_server_inet = "c****.ddns.net";////внешний ip или адрес для интернета
+
+// DHT Sensor - GPIO 5 = D1 on ESP-12E NodeMCU board
 
 
+
+// Timers auxiliar variables
 unsigned long now = millis();
 unsigned long lastMeasure = 0;
-unsigned long resendtime = 15000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
+unsigned long resendtime = 60000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -57,6 +63,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Starting ESP");
   pinMode (button_pin,INPUT_PULLUP);
+  pinMode(pin_analog_out, OUTPUT);
   //Если зажата кнопка при включении, то работаем через интрнет
   delay(1000);
   butt = !digitalRead(button_pin);// но кнопку на gnd;
@@ -224,7 +231,10 @@ void loop() {
       dtostrf(ppm, 6, 0, ppmTemp);//0 - количство символов после запятой
       client.publish(mqttTopicCO2, ppmTemp);
       digitalWrite(LED_BUILTIN, HIGH);
-      
+      //если высокое значение, включаем красный светодиод
+      if (ppm >redLevelPPM) digitalWrite(pin_analog_out,1);
+        //если нормальное значение, выключаем красный светодиод
+      if (ppm <=redLevelPPM) digitalWrite(pin_analog_out,0);
       }
     }
   }
