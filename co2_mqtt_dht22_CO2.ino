@@ -14,7 +14,7 @@
 #define agrigation_hum 2 //усредняем по 2 значениям 
 #define agrigation_temp 2 //усредняем по 2 значениям 
 #define DHTPin  14 //подклюен датчик DHTPin  14
-#define button_pin  16 //4кнопка для переключения на интрнет. удерживать при включении
+#define button_pin  16//кнопка для переключения на интрнет. удерживать при включении
 #define SEALEVELPRESSURE_HPA (1013.25) // Давление PHa на уровне моря
 Adafruit_BME280 bme;// Установка связи по интерфейсу I2C
 //BME280 садим на пины 4,5
@@ -30,29 +30,32 @@ int count_temp = 0;
 float sum_temp = 0;
 float t = 0;
 boolean butt; //состояние кнопки
+boolean avtocal=0; //автокалибровка
+//boolean flag_interruptag = 0 ; //для прерывания кнопкой
 float davlenie;
 float davlenie_old = 0;
 //float visota;
 
+
+
 // для wifi, mqtt и др
-const char* ssid = "C***"; //для локалки
+const char* ssid = "****"; //для локалки
 const char* password = "****";//для локалки
 const char* ssid_inet = "Asus";//для интернета, например на мобиле
 const char* password_inet = "Asus12345";//для интернета, например на мобиле
-const char* mqttUser = "****";
-const char* mqttPassword = "*****";
+const char* mqttUser = "******";
+const char* mqttPassword = "******";
 const char* mqttTopicHumidity = "/ESP_sens1/DHT/HUM";
 const char* mqttTopicTemperature = "/ESP_sens1/DHT/TEMP";
 const char* mqttTopicCO2 = "/ESP_sens1/DHT/CO2";
 const char* mqttTopic_davlenie = "/ESP_sens1/DHT/davlenie";
-const char* clientName = "ESP8266_DTH11_spalnya";
-char* mqtt_server = "192****";//для локалки
-char* mqtt_server_inet = "c****.ddns.net";////внешний ip или адрес для интернета
-
+const char* clientName = "ESP8266_DTH22_spalnya";
+char* mqtt_server = "1****";//для локалки
+char* mqtt_server_inet = "****.ddns.net";////внешний ip или адрес для интернета
 
 // CO2 sensor:
 SoftwareSerial mySerial(12, 13); // RX,TX
-byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79}; //запросс со2 с mhz19
 unsigned char cmd_off[] = "\xFF\x01\x79\x00\x00\x00\x00\x00\x86"; //ABC logic off
 unsigned char cmd_on[] = "\xFF\x01\x79\xA0\x00\x00\x00\x00\xE6";// ABC logic on
 unsigned char response[9];
@@ -60,7 +63,7 @@ unsigned char response[9];
 // Timers auxiliar variables
 unsigned long now = millis();
 unsigned long lastMeasure = 0;
-unsigned long resendtime = 60000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
+unsigned long resendtime = 30000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -77,10 +80,11 @@ void setup() {
 //Если зажата кнопка при включении, то работаем через интрнет
   delay(1000);
   butt = !digitalRead(button_pin);// но кнопку на gnd;
-  if (butt == 1 ) {
+  if (butt == 1 ) { 
       ssid = ssid_inet;
       password = password_inet;
       mqtt_server = mqtt_server_inet;
+      butt = 0;
       }
   
   dht.begin();
@@ -93,19 +97,36 @@ void setup() {
   mySerial.begin(9600);
 
 // выключаем автоколлибровку CO2  
-  mySerial.write(cmd_off, 9);
+   mySerial.write(cmd_off, 9);
+// mySerial.write(cmd_on, 9);
 
   if (!bme.begin(0x76)) 
      { // Проверка инициализации датчика давления
-      Serial.println("Could not find a valid BME280 sensor, check wiring!"); // Печать, об ошибки инициализации.
-    // while (1);// Зацикливаем
+      Serial.println("Could not find a valid BME280 sensor, check wiring!"); // ошибки инициализации.
+   
       }
 }
 
 
 
 void loop() {
+  butt = !digitalRead(button_pin);// но кнопку на gnd; вкл-выкл автокаллибровки
+    if (butt == 1 && avtocal == 0) {
+    butt = 0;
+    Serial.println("автокаллибровка ON"); // включаем автокаллибровку
+    avtocal = 1;
+    mySerial.write(cmd_on, 9);
+    delay (5000);
+     }
 
+    if (butt == 1 && avtocal == 1) {
+    butt = 0;
+    Serial.println("автокаллибровка OFF"); // выключаем автокаллибровку
+    avtocal = 0;
+    mySerial.write(cmd_off, 9);
+    delay (5000);
+     }
+  
   if (!client.connected()) {
         reconnect();
       }
@@ -218,11 +239,11 @@ void loop() {
                 unsigned int responseLow = (unsigned int) response[3];
                 unsigned int temperature = (unsigned int) response[4] - 40;
                 unsigned int ppm = (256 * responseHigh) + responseLow;
-            
+             Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
               //если СО2 не гонит, и CO2 изменилось публикуем в mqtt
                   if ((ppm > 300) && (ppm < 5000)&&( ppm != ppm_old)) {
                         ppm_old = ppm;
-                        Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
+                       // Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
                         digitalWrite(LED_BUILTIN, LOW);
                         Serial.print ("ppm Sending  = ");
                         Serial.println (ppm);
@@ -242,7 +263,8 @@ void loop() {
               davlenie = ceil (davlenie);
               Serial.println(davlenie);
               static char davlenieTemp[7];
-              if (davlenie != davlenie_old) {
+             //фильтруем косячные значенич
+               if ((davlenie > 690) && (davlenie < 800)&&( davlenie != davlenie_old)) {
                             dtostrf(davlenie, 6, 0, davlenieTemp);//0 - количство символов после запятой
                             davlenie_old = davlenie;
                             digitalWrite(LED_BUILTIN, LOW);
@@ -254,6 +276,7 @@ void loop() {
                   
                   
    }
+
 }
 
 
@@ -278,19 +301,6 @@ void callback(String topic, byte* message, unsigned int length) {
   }
 }
 
-
-// This functions reconnects your ESP8266 to your MQTT broker
-void reconnect() {
-  Serial.println("reconnecting to MQTT ");
-    while (!client.connected()) {
-      if (client.connect(WiFi.hostname().c_str(), mqttUser, mqttPassword)) {
-         Serial.println("Connected to MQTT ");
-        } else {
-      // Wait 5 seconds before retrying
-         delay(5000);
-    }
-  }
-}
 
 // This functions reconnects your ESP8266 to your MQTT broker
 void reconnect() {
