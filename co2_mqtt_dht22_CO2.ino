@@ -136,7 +136,7 @@ void loop() {
     display.clear();
     display.setFont(ArialMT_Plain_16);
     display.drawString(1, 10 , "Auto calibration");
-    display.drawString(50, 30 , "ON");
+    display.drawString(30, 50 , "ON");
     display.display();
     AEB_txt = "|AEB ON|";
     avtocal = 1;
@@ -150,7 +150,7 @@ void loop() {
     display.clear();
     display.setFont(ArialMT_Plain_16);
     display.drawString(1, 10 , "Auto calibration");
-    display.drawString(50, 30 , "OFF");
+    display.drawString(30, 50 , "OFF");
     display.display();
     AEB_txt = "|AEB OFF|";
     avtocal = 0;
