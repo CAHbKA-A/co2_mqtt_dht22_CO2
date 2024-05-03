@@ -16,7 +16,7 @@
 #define button_pin  16//кнопка для переключения на интрнет. удерживать при включении
 //#define SEALEVELPRESSURE_HPA (1013.25) // Давление PHa на уровне моря
 Adafruit_BME280 bme;// Установка связи по интерфейсу I2C
-/BME280 садим на пины 4,5
+//BME280 садим на пины 4,5
 SH1106Wire display(0x3c, 4, 5); //параллельно дисплей
 
 int count_hum = 0;
@@ -34,6 +34,7 @@ float sum_temp = 0;
 float t = 0;
 boolean butt; //состояние кнопки
 boolean avtocal = 0; //автокалибровка
+boolean displayOn = 1; //вкл выкл мониторчика
 //boolean flag_interruptag = 0 ; //для прерывания кнопкой
 float davlenie;
 float davlenie_old = 0;
@@ -45,14 +46,14 @@ const char* ssid = "****"; //для локалки
 const char* password = "****";//для локалки
 const char* ssid_inet = "Asus";//для интернета, например на мобиле
 const char* password_inet = "Asus12345";//для интернета, например на мобиле
-const char* mqttUser = "******";
-const char* mqttPassword = "******";
+const char* mqttUser = "******"; // юзер mqtt брокера
+const char* mqttPassword = "******";// пароль mqtt брокера
 const char* mqttTopicHumidity = "/ESP_sens1/DHT/HUM";
 const char* mqttTopicTemperature = "/ESP_sens1/DHT/TEMP";
 const char* mqttTopicCO2 = "/ESP_sens1/DHT/CO2";
 const char* mqttTopic_davlenie = "/ESP_sens1/DHT/davlenie";
 const char* clientName = "ESP8266_DTH22_spalnya";
-char* mqtt_server = "1****";//для локалки
+char* mqtt_server = "192.138.*.*";//для локалки
 char* mqtt_server_inet = "****.ddns.net";////внешний ip или адрес для интернета
 char* AEB_txt = "|AEB OFF|"; //Состояние автокаллибровки
 char* homeState = "|HOME"; //Через что передаем (домашнюю сеть или инет
@@ -101,6 +102,11 @@ void setup() {
     homeState = "|INET";
   }
 
+ //Если зажата кнопка автокалибровки, то вклюаем автокалибровку
+
+
+  
+
   dht.begin();
   setup_wifi();
   Serial.print("Connecting to MQTT ");
@@ -130,32 +136,34 @@ void setup() {
 
 void loop() {
   butt = !digitalRead(button_pin);// но кнопку на gnd; вкл-выкл автокаллибровки
-  if (butt == 1 && avtocal == 0) {
+  if (butt == 1 && displayOn == 0) {
     butt = 0;
-    Serial.println("автокаллибровка ON"); // включаем автокаллибровку кнопкой
+    Serial.println("Дисплей ON"); // включаем автокаллибровку кнопкой
     display.clear();
     display.setFont(ArialMT_Plain_16);
-    display.drawString(1, 10 , "Auto calibration");
-    display.drawString(30, 50 , "ON");
+    display.drawString(1, 10 , "Display");
+    display.drawString(50, 30 , "ON");
     display.display();
-    AEB_txt = "|AEB ON|";
-    avtocal = 1;
-    mySerial.write(cmd_on, 9);
+    //   AEB_txt = "|AEB ON|";
+    displayOn = 1;
+    //    mySerial.write(cmd_on, 9);
     delay (5000);
   }
 
-  if (butt == 1 && avtocal == 1) {
+  if (butt == 1 && displayOn == 1) {
     butt = 0;
-    Serial.println("автокаллибровка OFF"); // выключаем автокаллибровку кнопку
+    Serial.println("Дисплей OFF"); // выключаем автокаллибровку кнопку
     display.clear();
     display.setFont(ArialMT_Plain_16);
-    display.drawString(1, 10 , "Auto calibration");
-    display.drawString(30, 50 , "OFF");
+    display.drawString(1, 10 , "Display");
+    display.drawString(50, 30 , "OFF");
     display.display();
-    AEB_txt = "|AEB OFF|";
-    avtocal = 0;
-    mySerial.write(cmd_off, 9);
+    //AEB_txt = "|AEB OFF|";
+    displayOn = 0;
+    //mySerial.write(cmd_off, 9);
     delay (5000);
+    display.clear();
+    display.display();
   }
 
   if (!client.connected()) {
@@ -170,135 +178,140 @@ void loop() {
 
   // Publishes new temperature and humidity every N seconds
   if (now - lastMeasure > resendtime) {//интервал измерения
-        lastMeasure = now;
-    
-        //Влажность
-        h  = dht.readHumidity();
-        //накапливаем
-        Serial.print ("H=");
-        Serial.println (h);
-        sum_hum = sum_hum + h;
-        count_hum = count_hum + 1;
-    
-        //Температура
-        t = dht.readTemperature();
-        //накапливаем
-        sum_temp = sum_temp + t;
-        count_temp = count_temp + 1;
-        Serial.print ("T=");
-        Serial.println (t);
-    
-    
-        // Read temperature as Fahrenheit (isFahrenheit = true)
-        float f = dht.readTemperature(true);
-        // Check if any reads failed and exit early (to try again).
-        if (isnan(h) || isnan(t) || isnan(f)) {
-          return;
+    lastMeasure = now;
+
+    //Влажность
+    h  = dht.readHumidity();
+    //накапливаем
+    Serial.print ("H=");
+    Serial.println (h);
+    sum_hum = sum_hum + h;
+    count_hum = count_hum + 1;
+
+    //Температура
+    t = dht.readTemperature();
+    //накапливаем
+    sum_temp = sum_temp + t;
+    count_temp = count_temp + 1;
+    Serial.print ("T=");
+    Serial.println (t);
+
+
+    // Read temperature as Fahrenheit (isFahrenheit = true)
+    float f = dht.readTemperature(true);
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(h) || isnan(t) || isnan(f)) {
+      return;
+    }
+
+    //если накопили значения температуры, усредняем
+    if (count_temp >= agrigation_temp) {
+      t = sum_temp / count_temp;
+      count_temp = 0;
+      sum_temp = 0;
+      t = ceil (t);
+      Serial.print ("T avg=");
+      Serial.println (t);
+
+
+      //если знаение изменилось, отправляем
+      if (t != t_old) {
+        dtostrf(t, 6, 0, temperatureTemp); //0 - количство символов после запятой
+        digitalWrite(LED_BUILTIN, LOW);
+        t_old = t;
+        Serial.print ("T Sending  = ");
+        Serial.println (temperatureTemp);
+        // Publishes Temperature and
+        client.publish(mqttTopicTemperature, temperatureTemp);
+        digitalWrite(LED_BUILTIN, HIGH);
+      }
+      t = 0;
+
+    }
+
+
+    //если накопили значения влажности, усредняем
+    if (count_hum >= agrigation_hum) {
+      h = sum_hum / count_hum;
+      count_hum = 0;
+      sum_hum = 0;
+      h = ceil (h);
+      Serial.print ("H avg=");
+      Serial.println (h);
+
+
+      //если знаение изменилось, отправляем
+      if (h != h_old) {
+        dtostrf(h, 6, 0, humidityTemp);//0 - количство символов после запятой
+        h_old = h;
+        digitalWrite(LED_BUILTIN, LOW);
+        Serial.print ("H Sending  = ");
+        Serial.println (humidityTemp);
+        client.publish(mqttTopicHumidity, humidityTemp);
+        digitalWrite(LED_BUILTIN, HIGH);
+      }
+      h = 0;
+    }
+
+
+
+    //Займемся СО2
+    mySerial.write(cmd, 9);
+    memset(response, 0, 9);
+    delay(10);
+    mySerial.readBytes(response, 9);
+    int i;
+    byte crc = 0;
+    for (i = 1; i < 8; i++) crc += response[i];
+    crc = 255 - crc;
+    crc++;
+
+
+
+    if ( !(response[0] == 0xFF && response[1] == 0x86 && response[8] == crc) ) {
+
+      display.clear();
+      display.drawString(5, 1, "CRC error. ");
+      display.drawString(10, 20, "MHZ-19B");
+      display.display();
+      Serial.println("CRC error: " + String(crc) + " / " + String(response[8]));
+      Serial.println("Sensor CRC error");
+      while (mySerial.available()) {
+        mySerial.read();
+      }
+
+    } else
+    {
+      unsigned int responseHigh = (unsigned int) response[2];
+      unsigned int responseLow = (unsigned int) response[3];
+      unsigned int temperature = (unsigned int) response[4] - 40;
+      ppm = (256 * responseHigh) + responseLow;
+      Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
+      //если СО2 не гонит, и CO2 изменилось публикуем в mqtt
+      if ((ppm > 300) && (ppm < 5000) && ( ppm != ppm_old)) {
+        ppm_old = ppm;
+        // Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
+        digitalWrite(LED_BUILTIN, LOW);
+        Serial.print ("ppm Sending  = ");
+        Serial.println (ppm);
+
+        dtostrf(ppm, 6, 0, ppmTemp);//0 - количство символов после запятой
+        client.publish(mqttTopicCO2, ppmTemp);
+        digitalWrite(LED_BUILTIN, HIGH);
+        //если высокое значение, включаем красный светодиод
+        if (ppm > redLevelPPM)
+        {
+          digitalWrite(pin_analog_out, 1);
+          PPMState = "BAD!!!|";
         }
-    
-        //если накопили значения температуры, усредняем
-        if (count_temp >= agrigation_temp) {
-          t = sum_temp / count_temp;
-          count_temp = 0;
-          sum_temp = 0;
-          t = ceil (t);
-          Serial.print ("T avg=");
-          Serial.println (t);
-    
-    
-          //если знаение изменилось, отправляем
-          if (t != t_old) {
-            dtostrf(t, 6, 0, temperatureTemp); //0 - количство символов после запятой
-            digitalWrite(LED_BUILTIN, LOW);
-            t_old = t;
-            Serial.print ("T Sending  = ");
-            Serial.println (temperatureTemp);
-            // Publishes Temperature and
-            client.publish(mqttTopicTemperature, temperatureTemp);
-            digitalWrite(LED_BUILTIN, HIGH);
-          }
-          t = 0;
-    
+        //если нормальное значение, выключаем красный светодиод
+        if (ppm <= redLevelPPM)
+        {
+          digitalWrite(pin_analog_out, 0);
+          PPMState = "GOOD|";
         }
-    
-    
-        //если накопили значения влажности, усредняем
-        if (count_hum >= agrigation_hum) {
-          h = sum_hum / count_hum;
-          count_hum = 0;
-          sum_hum = 0;
-          h = ceil (h);
-          Serial.print ("H avg=");
-          Serial.println (h);
-    
-    
-          //если знаение изменилось, отправляем
-          if (h != h_old) {
-            dtostrf(h, 6, 0, humidityTemp);//0 - количство символов после запятой
-            h_old = h;
-            digitalWrite(LED_BUILTIN, LOW);
-            Serial.print ("H Sending  = ");
-            Serial.println (humidityTemp);
-            client.publish(mqttTopicHumidity, humidityTemp);
-            digitalWrite(LED_BUILTIN, HIGH);
-          }
-          h = 0;
-        }
-    
-    
-    
-        //Займемся СО2
-        mySerial.write(cmd, 9);
-        memset(response, 0, 9);
-        mySerial.readBytes(response, 9);
-        int i;
-        byte crc = 0;
-        for (i = 1; i < 8; i++) crc += response[i];
-        crc = 255 - crc;
-        crc++;
-    
-    
-    
-        if ( !(response[0] == 0xFF && response[1] == 0x86 && response[8] == crc) ) {
-    
-          display.clear();
-          display.drawString(5, 1, "CRC error. ");
-          display.drawString(10, 20, "MHZ-19B");
-          display.display();
-          Serial.println("CRC error: " + String(crc) + " / " + String(response[8]));
-          Serial.println("Sensor CRC error");
-          } else
-                {
-                        unsigned int responseHigh = (unsigned int) response[2];
-                        unsigned int responseLow = (unsigned int) response[3];
-                        unsigned int temperature = (unsigned int) response[4] - 40;
-                        ppm = (256 * responseHigh) + responseLow;
-                        Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
-                        //если СО2 не гонит, и CO2 изменилось публикуем в mqtt
-                        if ((ppm > 300) && (ppm < 5000) && ( ppm != ppm_old)) {
-                          ppm_old = ppm;
-                          // Serial.print("CO2="); Serial.print(ppm); Serial.println(";");
-                          digitalWrite(LED_BUILTIN, LOW);
-                          Serial.print ("ppm Sending  = ");
-                          Serial.println (ppm);
-                  
-                          dtostrf(ppm, 6, 0, ppmTemp);//0 - количство символов после запятой
-                          client.publish(mqttTopicCO2, ppmTemp);
-                          digitalWrite(LED_BUILTIN, HIGH);
-                          //если высокое значение, включаем красный светодиод
-                          if (ppm > redLevelPPM)
-                          {
-                            digitalWrite(pin_analog_out, 1);
-                            PPMState = "BAD!!!|";
-                          }
-                          //если нормальное значение, выключаем красный светодиод
-                          if (ppm <= redLevelPPM)
-                          {
-                            digitalWrite(pin_analog_out, 0);
-                            PPMState = "GOOD|";
-                          }
-                        }
-                  }
+      }
+    }
     //давление
     Serial.print ("PRESSURE= ");
     davlenie = bme.readPressure() / 133, 3;
@@ -318,18 +331,20 @@ void loop() {
 
     //Выводим данные
     display.clear();
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 0, "********************************");
-    display.drawString(0, 9, "T=" + String(temperatureTemp) + "C");
-    display.drawString(0, 30, "H=" + String(humidityTemp) + "%");
-    display.drawString(50, 9, "P=" + String(davlenieTemp) + "mmHs");
-    display.drawString(50, 30, "CO=" + String(ppmTemp) + "ppm");
-    display.drawString(0, 40, "********************************");
-    display.drawString(40, 50, AEB_txt);
-    display.drawString(1, 50, PPMState);
-    display.drawString(95, 50, homeState);
-    display.display();
+    if (displayOn == 1) { //Если флаг монитора включен
 
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(0, 0, "********************************");
+      display.drawString(0, 9, "T=" + String(temperatureTemp) + "C");
+      display.drawString(0, 30, "H=" + String(humidityTemp) + "%");
+      display.drawString(50, 9, "P=" + String(davlenieTemp) + "mmHs");
+      display.drawString(50, 30, "CO=" + String(ppmTemp) + "ppm");
+      display.drawString(0, 40, "********************************");
+      display.drawString(40, 50, AEB_txt);
+      display.drawString(1, 50, PPMState);
+      display.drawString(95, 50, homeState);
+      display.display();
+    }
   }
 
 }
@@ -346,7 +361,7 @@ void setup_wifi() {
   Serial.println(ssid);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-  delay(500);
+    delay(500);
   }
   Serial.println("Connected to WiFi");
   display.drawString(0, 24, "Connected to WiFi");
