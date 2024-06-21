@@ -34,30 +34,31 @@ float sum_temp = 0;
 float t = 0;
 boolean butt; //состояние кнопки
 boolean avtocal = 0; //автокалибровка
-boolean displayOn = 1; //вкл выкл мониторчика
-//boolean flag_interruptag = 0 ; //для прерывания кнопкой
+
+int displayOn = 1; //режим дисплея
 float davlenie;
 float davlenie_old = 0;
 static char davlenieTemp[7];
 static char temperatureTemp[7];
+int arrayPPM[110]; // для графика
 
 // для wifi, mqtt и др
-const char* ssid = "****"; //для локалки
-const char* password = "****";//для локалки
+const char* ssid = "HomeWiFi"; //для локалки
+const char* password = "HomePass";//для локалки
 const char* ssid_inet = "Asus";//для интернета, например на мобиле
 const char* password_inet = "Asus12345";//для интернета, например на мобиле
-const char* mqttUser = "******"; // юзер mqtt брокера
-const char* mqttPassword = "******";// пароль mqtt брокера
+const char* mqttUser = "mosquitoUser"; // юзер mqtt брокера
+const char* mqttPassword = "Pass_msquit"; // пароль mqtt брокера
 const char* mqttTopicHumidity = "/ESP_sens1/DHT/HUM";
 const char* mqttTopicTemperature = "/ESP_sens1/DHT/TEMP";
 const char* mqttTopicCO2 = "/ESP_sens1/DHT/CO2";
 const char* mqttTopic_davlenie = "/ESP_sens1/DHT/davlenie";
 const char* clientName = "ESP8266_DTH22_spalnya";
-char* mqtt_server = "192.138.*.*";//для локалки
-char* mqtt_server_inet = "****.ddns.net";////внешний ip или адрес для интернета
-char* AEB_txt = "|AEB OFF|"; //Состояние автокаллибровки
-char* homeState = "|HOME"; //Через что передаем (домашнюю сеть или инет
-char* PPMState = "GOOD|"; //состояние воздуха
+const char* mqtt_server = "192.168.0.22";//для локалки
+const char* mqtt_server_inet = "myIP.ddns.net";////внешний ip или адрес для интернета
+const char* AEB_txt = "|AEB OFF|"; //Состояние автокаллибровки
+const char* homeState = "|HOME"; //Через что передаем (домашнюю сеть или инет
+const char* PPMState = "GOOD|"; //состояние воздуха
 
 // CO2 sensor:
 SoftwareSerial mySerial(12, 13); // RX,TX
@@ -69,7 +70,7 @@ unsigned char response[9];
 // Timers auxiliar variables
 unsigned long now = millis();
 unsigned long lastMeasure = 0;
-unsigned long resendtime = 60000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ
+unsigned long resendtime = 60000; //60sec  ПЕРИОД ИЗМЕРЕНИЯ 60000
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -102,10 +103,10 @@ void setup() {
     homeState = "|INET";
   }
 
- //Если зажата кнопка автокалибровки, то вклюаем автокалибровку
+  //Если зажата кнопка автокалибровки, то вклюаем автокалибровку
 
 
-  
+
 
   dht.begin();
   setup_wifi();
@@ -135,36 +136,74 @@ void setup() {
 
 
 void loop() {
-  butt = !digitalRead(button_pin);// но кнопку на gnd; вкл-выкл автокаллибровки
-  if (butt == 1 && displayOn == 0) {
-    butt = 0;
-    Serial.println("Дисплей ON"); // включаем автокаллибровку кнопкой
-    display.clear();
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(1, 10 , "Display");
-    display.drawString(50, 30 , "ON");
-    display.display();
-    //   AEB_txt = "|AEB ON|";
-    displayOn = 1;
-    //    mySerial.write(cmd_on, 9);
-    delay (5000);
-  }
+
 
   if (butt == 1 && displayOn == 1) {
     butt = 0;
-    Serial.println("Дисплей OFF"); // выключаем автокаллибровку кнопку
+    Serial.println("Дисплей OFF"); // выключаем дисплей
     display.clear();
     display.setFont(ArialMT_Plain_16);
     display.drawString(1, 10 , "Display");
     display.drawString(50, 30 , "OFF");
     display.display();
     //AEB_txt = "|AEB OFF|";
-    displayOn = 0;
+    displayOn = 0; // нет изображения
     //mySerial.write(cmd_off, 9);
     delay (5000);
     display.clear();
     display.display();
   }
+
+  butt = !digitalRead(button_pin);// но кнопку на gnd;
+  if (butt == 1 && displayOn == 0) {
+    butt = 0;
+    Serial.println("Дисплей ON (CO2)"); // включаем дисплей кнопкой
+    display.clear();
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(1, 10 , "Display");
+    display.drawString(50, 30 , "ON CO2");
+    display.display();
+    displayOn = 2; //обчные показания
+    delay (5000);
+ 
+  }
+
+
+
+
+
+  if (butt == 1 && displayOn == 2) {
+    butt = 0;
+    Serial.println("Дисплей Graf"); // PPM
+    display.clear();
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(1, 10 , "Display");
+    display.drawString(50, 30 , "Graf");
+    display.display();
+    displayOn = 3;
+    delay (5000);
+    display.clear();
+    display.display();
+  }
+
+
+
+  if (butt == 1 && displayOn == 3) {
+    butt = 0;
+    Serial.println("Дисплей PPM Graf"); // PPM Graf
+    display.clear();
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(1, 10 , "Display");
+    display.drawString(50, 30 , "All");
+    display.display();
+    displayOn = 1;
+    delay (5000);
+    display.clear();
+    display.display();
+  }
+
+
+
 
   if (!client.connected()) {
     reconnect();
@@ -214,7 +253,7 @@ void loop() {
       Serial.println (t);
 
 
-      //если знаение изменилось, отправляем
+      //если значение изменилось, отправляем
       if (t != t_old) {
         dtostrf(t, 6, 0, temperatureTemp); //0 - количство символов после запятой
         digitalWrite(LED_BUILTIN, LOW);
@@ -329,6 +368,15 @@ void loop() {
       digitalWrite(LED_BUILTIN, HIGH);
     }
 
+
+    //ppm= ppmTemp
+    //сохраняем в массив и сдвигаем
+    const int temp = arrayPPM[0];
+    for (int i = 1; i < 50; i++)
+      arrayPPM[i - 1] = arrayPPM[i];
+    arrayPPM[50 - 1] = ppm;
+
+
     //Выводим данные
     display.clear();
     if (displayOn == 1) { //Если флаг монитора включен
@@ -343,8 +391,41 @@ void loop() {
       display.drawString(40, 50, AEB_txt);
       display.drawString(1, 50, PPMState);
       display.drawString(95, 50, homeState);
-      display.display();
+
     }
+
+
+
+    if (displayOn == 2) { //только ППМ
+      //ppmTemp = "400";
+      display.setFont(ArialMT_Plain_24);
+      display.drawString(45, 5 , "CO2");
+      display.drawString(12, 30, String(ppmTemp));
+      display.drawString(75, 30, " ppm");
+    }
+
+
+    if (displayOn == 3) { // ППМ график
+
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(45, 0, String(ppmTemp) + " ppm");
+      display.drawString(113, 50, "Ok");
+      display.drawString(110, 30, "Bad");
+      display.drawString(113, 10, "!!!");
+      display.fillRect(3, 47, 125, 1); //шкала
+      display.fillRect(3, 27, 125, 1); //шкала
+
+      for (int i = 0; i <= 50; i++) {
+        display.fillRect(i * 2, 60 - (arrayPPM[i] - 400) / 30, 2, arrayPPM[i] / 30); // Пустой прямоугольник
+      }
+    }
+
+
+
+
+
+    display.display();
+
   }
 
 }
